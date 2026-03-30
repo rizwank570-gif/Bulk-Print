@@ -74,7 +74,7 @@
             border-bottom: 1px solid var(--border);
             transition: background 0.1s;
         }
-        tbody tr.active { background-color: #eff6ff; }
+        tbody tr.active { background-color: #eff6ff; border-left: 4px solid var(--primary); }
         tbody tr:hover { background-color: var(--row-hover); }
 
         td { padding: 12px 15px; font-size: 14px; }
@@ -103,6 +103,7 @@
             color: var(--primary);
             font-size: 14px;
             cursor: pointer;
+            font-weight: 500;
         }
 
         footer {
@@ -118,37 +119,60 @@
             background: var(--primary);
             color: white;
             border: none;
-            padding: 10px 40px;
+            padding: 12px 40px;
             border-radius: 6px;
             font-weight: 600;
             cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
-        .primary-btn:disabled { background: #94a3b8; }
+        .primary-btn:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); }
+        .primary-btn:disabled { background: #94a3b8; cursor: not-allowed; transform: none; }
+
+        /* Printing Status UI */
+        .status-pill {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-pending { background: #f1f5f9; color: #64748b; }
+        .status-printing { background: #dbeafe; color: #2563eb; animation: pulse 1.5s infinite; }
+        .status-done { background: #d1fae5; color: #059669; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
 
         #overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255,255,255,0.8);
+            background: rgba(255,255,255,0.85);
             display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 1000;
+            backdrop-filter: blur(2px);
         }
 
-        /* Printing Status UI */
-        .status-pill {
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: bold;
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
         }
-        .status-pending { background: #f1f5f9; color: #64748b; }
-        .status-printing { background: #dbeafe; color: #2563eb; }
-        .status-done { background: #d1fae5; color: #059669; }
 
-        #printFrame { position: absolute; width: 0; height: 0; border: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        #printFrame { position: absolute; width: 0; height: 0; border: none; visibility: hidden; }
     </style>
 </head>
 <body>
@@ -156,9 +180,9 @@
     <header>
         <div class="header-left">
             <span class="logo-icon">📄</span>
-            <span class="header-title">Batch Print Tool (Staple Friendly)</span>
+            <span class="header-title">Batch Print Tool (Pro)</span>
         </div>
-        <div style="font-size: 13px; color: var(--text-muted);">Mode: Individual File Printing</div>
+        <div id="connectionStatus" style="font-size: 12px; color: var(--success); font-weight: 500;">Staple-Friendly Mode Active</div>
     </header>
 
     <main>
@@ -168,14 +192,14 @@
                     <tr>
                         <th style="width: 40px;"><input type="checkbox" id="selectAll" checked></th>
                         <th>File Name</th>
-                        <th>Pages</th>
+                        <th>Total Pages</th>
                         <th>Copies</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="fileTableBody">
-                    <!-- Dynamic rows -->
+                    <!-- Dynamic rows will appear here -->
                 </tbody>
             </table>
         </div>
@@ -186,23 +210,24 @@
             <button class="tool-btn" onclick="triggerUpload()">＋ Add File</button>
             <button class="tool-btn" onclick="clearSelection()">🗑️ Clear Selection</button>
         </div>
-        <div id="summaryText" style="font-size: 14px; color: var(--text-muted);">
+        <div id="summaryText" style="font-size: 13px; color: var(--text-muted); font-weight: 500;">
             Total: 0 file(s) selected
         </div>
     </div>
 
     <footer>
-        <div id="queueStatus" style="font-size: 14px; font-weight: 500;">Ready to start printing line...</div>
-        <button id="printBtn" class="primary-btn" disabled onclick="startPrintingQueue()">Print All</button>
+        <div id="queueStatus" style="font-size: 14px; font-weight: 600; color: var(--text-main);">Taiyaar hain... Reports upload karein.</div>
+        <button id="printBtn" class="primary-btn" disabled onclick="handleMainButtonClick()">Print All</button>
     </footer>
 
     <input type="file" id="hiddenFileInput" accept="application/pdf" multiple style="display:none;">
-    <iframe id="printFrame"></iframe>
+    <iframe id="printFrame" name="printFrame"></iframe>
 
     <div id="overlay">
-        <div style="font-weight: bold; margin-bottom: 10px;">Printing in Progress...</div>
-        <div id="overlayText">Please handle the print dialogs.</div>
-        <button onclick="stopQueue()" style="margin-top: 15px; border: 1px solid #ccc; padding: 5px 10px; cursor: pointer;">Cancel Queue</button>
+        <div class="loader"></div>
+        <div id="overlayMainText" style="font-weight: bold; font-size: 18px; color: var(--text-main);">Printing Progress...</div>
+        <div id="overlaySubText" style="color: var(--text-muted); margin-top: 5px;">Kripya print dialog ko handle karein.</div>
+        <button onclick="stopQueue()" style="margin-top: 25px; background: white; border: 1px solid var(--border); padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: 500;">Stop Queue</button>
     </div>
 
     <script>
@@ -213,10 +238,12 @@
         const printFrame = document.getElementById('printFrame');
         const queueStatus = document.getElementById('queueStatus');
         const overlay = document.getElementById('overlay');
+        const overlayMainText = document.getElementById('overlayMainText');
 
         let fileQueue = [];
-        let currentPrintingIndex = -1;
+        let currentIdx = 0;
         let isProcessing = false;
+        let selectedItemsForPrint = [];
 
         function triggerUpload() { fileInput.click(); }
 
@@ -225,6 +252,8 @@
             if (uploaded.length === 0) return;
 
             const { PDFDocument } = PDFLib;
+            queueStatus.innerText = "Files analyze ho rahi hain...";
+
             for (const file of uploaded) {
                 try {
                     const arrayBuffer = await file.arrayBuffer();
@@ -238,10 +267,11 @@
                         selected: true,
                         status: 'pending'
                     });
-                } catch (err) { console.error(err); }
+                } catch (err) { console.error("PDF Load Error:", err); }
             }
             renderTable();
             fileInput.value = '';
+            queueStatus.innerText = "Files taiyaar hain! 'Print All' par click karein.";
         });
 
         function renderTable() {
@@ -251,21 +281,25 @@
             fileQueue.forEach((item, index) => {
                 if (item.selected) selectedCount++;
                 const row = document.createElement('tr');
-                if (index === currentPrintingIndex) row.className = 'active';
+                if (isProcessing && index === currentIdx) row.className = 'active';
 
                 row.innerHTML = `
-                    <td><input type="checkbox" ${item.selected ? 'checked' : ''} onchange="updateItem('${item.id}', 'selected', this.checked)"></td>
-                    <td style="font-weight:500;">${item.name}</td>
-                    <td>${item.totalPages}</td>
-                    <td><input type="number" value="${item.copies}" min="1" onchange="updateItem('${item.id}', 'copies', parseInt(this.value))"></td>
-                    <td><span class="status-pill status-${item.status}">${item.status.toUpperCase()}</span></td>
-                    <td><button onclick="deleteItem('${item.id}')" style="background:none; border:none; cursor:pointer;">🗑️</button></td>
+                    <td><input type="checkbox" ${item.selected ? 'checked' : ''} onchange="updateItem('${item.id}', 'selected', this.checked)" ${isProcessing ? 'disabled' : ''}></td>
+                    <td style="font-weight:600; color: #334155;">${item.name}</td>
+                    <td style="color: #64748b;">${item.totalPages} Pages</td>
+                    <td><input type="number" value="${item.copies}" min="1" onchange="updateItem('${item.id}', 'copies', parseInt(this.value))" ${isProcessing ? 'disabled' : ''}></td>
+                    <td><span class="status-pill status-${item.status}">${item.status}</span></td>
+                    <td><button onclick="deleteItem('${item.id}')" style="background:none; border:none; cursor:pointer;" ${isProcessing ? 'disabled' : ''}>🗑️</button></td>
                 `;
                 tableBody.appendChild(row);
             });
 
-            summaryText.innerText = `Total: ${selectedCount} file(s) selected`;
-            printBtn.disabled = selectedCount === 0 || isProcessing;
+            summaryText.innerText = `Total Selected: ${selectedCount} file(s)`;
+            printBtn.disabled = selectedCount === 0;
+            
+            if (!isProcessing) {
+                printBtn.innerText = "Print All";
+            }
         }
 
         function updateItem(id, field, value) {
@@ -279,77 +313,136 @@
         }
 
         function clearSelection() {
+            if (isProcessing) return;
             fileQueue = fileQueue.filter(i => !i.selected);
             renderTable();
         }
 
-        // --- QUEUE PRINTING LOGIC ---
-
-        async function startPrintingQueue() {
-            const selectedItems = fileQueue.filter(i => i.selected && i.status !== 'done');
-            if (selectedItems.length === 0) return;
-
-            isProcessing = true;
-            printBtn.disabled = true;
-            overlay.style.display = 'flex';
-            
-            // Sabko pending mark karein
-            selectedItems.forEach(i => i.status = 'pending');
-            
-            processNext(0, selectedItems);
+        function handleMainButtonClick() {
+            if (isProcessing) {
+                // Agar queue ruki hui hai (popup blocked), toh manual resume ka kaam karega
+                processNext();
+            } else {
+                startPrintingQueue();
+            }
         }
 
-        function processNext(index, items) {
-            if (index >= items.length || !isProcessing) {
+        async function startPrintingQueue() {
+            selectedItemsForPrint = fileQueue.filter(i => i.selected && i.status !== 'done');
+            if (selectedItemsForPrint.length === 0) return;
+
+            isProcessing = true;
+            currentIdx = 0;
+            overlay.style.display = 'flex';
+            
+            // Initializing statuses
+            fileQueue.forEach(i => { if(i.selected) i.status = 'pending'; });
+            
+            processNext();
+        }
+
+        function processNext() {
+            if (currentIdx >= selectedItemsForPrint.length || !isProcessing) {
                 finishQueue();
                 return;
             }
 
-            const currentItem = items[index];
-            currentItem.status = 'printing';
-            queueStatus.innerText = `Printing Report ${index + 1} of ${items.length}: ${currentItem.name}`;
+            const currentItem = selectedItemsForPrint[currentIdx];
+            
+            // Table mein row update karein
+            fileQueue.find(f => f.id === currentItem.id).status = 'printing';
             renderTable();
+
+            overlayMainText.innerText = `Printing: ${currentIndexDisplay()} of ${selectedItemsForPrint.length}`;
+            queueStatus.innerText = `Abhi print ho rahi hai: ${currentItem.name}`;
 
             const fileUrl = URL.createObjectURL(currentItem.file);
             printFrame.src = fileUrl;
 
+            // Jab PDF load ho jaye
             printFrame.onload = () => {
                 setTimeout(() => {
                     try {
-                        // Jab print dialog close ho (onafterprint callback)
+                        // Reliable detection for print finish
+                        window.onfocus = () => {
+                            window.onfocus = null; // Clean up
+                            handlePrintFinished(currentItem, fileUrl);
+                        };
+
+                        // Optional secondary check
                         printFrame.contentWindow.onafterprint = () => {
-                            URL.revokeObjectURL(fileUrl);
-                            currentItem.status = 'done';
-                            renderTable();
-                            // Agli file 1.5 sec ke baad
-                            setTimeout(() => processNext(index + 1, items), 1500);
+                            handlePrintFinished(currentItem, fileUrl);
                         };
 
                         printFrame.contentWindow.focus();
                         printFrame.contentWindow.print();
                     } catch (e) {
                         console.error("Print Error:", e);
-                        alert("Please click 'Always allow popups' in the browser address bar.");
-                        stopQueue();
+                        mainStatusBlocked();
                     }
-                }, 500);
+                }, 400); // Chhota delay rendering ke liye
             };
+        }
+
+        function currentIndexDisplay() {
+            return currentIdx + 1;
+        }
+
+        function handlePrintFinished(item, url) {
+            if (item.status === 'done') return; // Prevent double trigger
+            
+            URL.revokeObjectURL(url);
+            const queueItem = fileQueue.find(f => f.id === item.id);
+            if (queueItem) queueItem.status = 'done';
+            
+            currentIdx++;
+            renderTable();
+
+            // Next file try karein
+            if (currentIdx < selectedItemsForPrint.length) {
+                // Chhota delay browser ko breathe karne dene ke liye
+                setTimeout(processNext, 800);
+            } else {
+                finishQueue();
+            }
+        }
+
+        function mainStatusBlocked() {
+            overlay.style.display = 'none';
+            isProcessing = true; // Technically still processing but stuck
+            printBtn.disabled = false;
+            printBtn.innerText = "Print Next File ⏭";
+            queueStatus.innerText = "Browser ne popup roka. Kripya upar button dabayein.";
+            queueStatus.style.color = "#ef4444";
         }
 
         function finishQueue() {
             isProcessing = false;
+            currentIdx = 0;
             overlay.style.display = 'none';
-            queueStatus.innerText = "All reports sent to printer!";
+            queueStatus.innerText = "Mubarak ho! Sabhi reports printer ko bhej di gayi hain.";
+            queueStatus.style.color = "var(--success)";
+            printBtn.innerText = "Print All Again";
             printBtn.disabled = false;
+            uploader.disabled = false;
             renderTable();
         }
 
         function stopQueue() {
             isProcessing = false;
             overlay.style.display = 'none';
-            queueStatus.innerText = "Printing stopped by user.";
+            queueStatus.innerText = "Printing queue ko rok diya gaya hai.";
+            queueStatus.style.color = "var(--warning)";
+            printBtn.innerText = "Print Remaining";
+            printBtn.disabled = false;
             renderTable();
         }
+
+        // Select All functionality
+        document.getElementById('selectAll').addEventListener('change', (e) => {
+            fileQueue.forEach(i => i.selected = e.target.checked);
+            renderTable();
+        });
     </script>
 </body>
 </html>
