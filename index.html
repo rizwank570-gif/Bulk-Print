@@ -226,8 +226,11 @@
     <div id="overlay">
         <div class="loader"></div>
         <div id="overlayMainText" style="font-weight: bold; font-size: 18px; color: var(--text-main);">Printing Progress...</div>
-        <div id="overlaySubText" style="color: var(--text-muted); margin-top: 5px;">Kripya print dialog ko handle karein.</div>
-        <button onclick="stopQueue()" style="margin-top: 25px; background: white; border: 1px solid var(--border); padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: 500;">Stop Queue</button>
+        <div id="overlaySubText" style="color: var(--text-muted); margin-top: 5px;">Print dialog handle karein. Agar auto-next na chale toh 'Next File' dabayein.</div>
+        <div style="display: flex; gap: 15px; margin-top: 25px;">
+            <button id="forceNextBtn" onclick="forceNext()" style="background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; display: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">⏭ Next File</button>
+            <button onclick="stopQueue()" style="background: white; border: 1px solid var(--border); padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 500;">Stop Queue</button>
+        </div>
     </div>
 
     <script>
@@ -355,6 +358,7 @@
 
             overlayMainText.innerText = `Printing: ${currentIndexDisplay()} of ${selectedItemsForPrint.length}`;
             queueStatus.innerText = `Abhi print ho rahi hai: ${currentItem.name}`;
+            document.getElementById('forceNextBtn').style.display = 'block'; // Failsafe button show karein
 
             const fileUrl = URL.createObjectURL(currentItem.file);
             printFrame.src = fileUrl;
@@ -363,16 +367,23 @@
             printFrame.onload = () => {
                 setTimeout(() => {
                     try {
-                        // Reliable detection for print finish
-                        window.onfocus = () => {
+                        let isDone = false;
+                        const printFinished = () => {
+                            if (isDone) return;
+                            isDone = true;
                             window.onfocus = null; // Clean up
                             handlePrintFinished(currentItem, fileUrl);
                         };
 
-                        // Optional secondary check
-                        printFrame.contentWindow.onafterprint = () => {
-                            handlePrintFinished(currentItem, fileUrl);
-                        };
+                        // Best method for Chrome/Edge (Detects Print dialog close)
+                        const mql = printFrame.contentWindow.matchMedia('print');
+                        mql.onchange = (e) => { if (!e.matches) printFinished(); };
+
+                        // Fallback 1: Standard event
+                        printFrame.contentWindow.onafterprint = printFinished;
+
+                        // Fallback 2: Window Focus
+                        window.onfocus = () => { setTimeout(printFinished, 500); };
 
                         printFrame.contentWindow.focus();
                         printFrame.contentWindow.print();
@@ -380,8 +391,24 @@
                         console.error("Print Error:", e);
                         mainStatusBlocked();
                     }
-                }, 400); // Chhota delay rendering ke liye
+                }, 500); // Delay for rendering
             };
+        }
+
+        function forceNext() {
+            // Agar browser atak jaye, toh user manual next daba sakta hai
+            const currentItem = selectedItemsForPrint[currentIdx];
+            if (currentItem) {
+                const queueItem = fileQueue.find(f => f.id === currentItem.id);
+                if (queueItem) queueItem.status = 'done';
+            }
+            currentIdx++;
+            renderTable();
+            if (currentIdx < selectedItemsForPrint.length) {
+                setTimeout(processNext, 500);
+            } else {
+                finishQueue();
+            }
         }
 
         function currentIndexDisplay() {
