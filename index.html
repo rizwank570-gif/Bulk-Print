@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Batch Print Tool (Staple Friendly)</title>
     
-    <!-- PDF-Lib for page counting -->
+    <!-- PDF-Lib page counting ke liye -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 
     <style>
@@ -43,6 +43,22 @@
         .header-left { display: flex; align-items: center; gap: 10px; }
         .logo-icon { color: #ef4444; font-size: 24px; }
         .header-title { font-weight: 600; font-size: 16px; }
+
+        .header-right { display: flex; align-items: center; gap: 15px; }
+        
+        /* Auto Print Help Button */
+        .kiosk-help-btn {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+        }
+        .kiosk-help-btn:hover { background: #059669; }
 
         main {
             flex: 1;
@@ -203,6 +219,28 @@
             border-radius: 20px; 
             border: 1px solid #bfdbfe;
         }
+
+        /* Modal styling for Kiosk Help */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 2000; 
+            left: 0; top: 0; width: 100%; height: 100%; 
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 10% auto; 
+            padding: 30px; 
+            border-radius: 12px;
+            width: 500px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close-btn:hover { color: black; }
+        .modal h3 { margin-top: 0; color: var(--text-main); }
+        .modal p, .modal li { color: #475569; font-size: 14px; line-height: 1.6; }
+        .code-snippet { background: #f1f5f9; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 13px; color: #ef4444; word-break: break-all; }
     </style>
 </head>
 <body>
@@ -212,7 +250,10 @@
             <span class="logo-icon">📄</span>
             <span class="header-title">Batch Print Tool (Pro)</span>
         </div>
-        <div id="connectionStatus" style="font-size: 12px; color: var(--success); font-weight: 500;">Staple-Friendly Mode Active</div>
+        <div class="header-right">
+            <div id="connectionStatus" style="font-size: 12px; color: var(--success); font-weight: 500; margin-right: 15px;">Staple-Friendly Mode</div>
+            <button class="kiosk-help-btn" onclick="openModal()">🚀 Auto-Print Setup</button>
+        </div>
     </header>
 
     <main>
@@ -221,15 +262,15 @@
                 <thead>
                     <tr>
                         <th style="width: 40px;"><input type="checkbox" id="selectAll"></th>
-                        <th>File Name</th>
-                        <th>Total Pages</th>
+                        <th>File Name (Naam)</th>
+                        <th>Pages</th>
                         <th>Copies</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="fileTableBody">
-                    <!-- Dynamic rows will appear here -->
+                    <!-- Yahan dynamic rows aayengi -->
                 </tbody>
             </table>
         </div>
@@ -237,17 +278,17 @@
 
     <div class="bottom-toolbar">
         <div class="toolbar-left">
-            <button class="tool-btn" onclick="triggerUpload()">＋ Add File</button>
-            <button class="tool-btn" onclick="clearSelection()">🗑️ Clear Selection</button>
+            <button class="tool-btn" onclick="triggerUpload()">＋ Add File (File Jodein)</button>
+            <button class="tool-btn" onclick="clearSelection()">🗑️ Clear Selection (Saaf Karein)</button>
         </div>
         <div id="summaryText" style="font-size: 13px; color: var(--text-muted); font-weight: 500;">
-            Total: 0 file(s) selected
+            Total: 0 file(s) chuni gayi hain
         </div>
     </div>
 
     <footer>
         <div id="queueStatus" style="font-size: 14px; font-weight: 600; color: var(--text-main);">Taiyaar hain... Reports upload karein.</div>
-        <button id="printBtn" class="primary-btn" disabled onclick="handleMainButtonClick()">Print All</button>
+        <button id="printBtn" class="primary-btn" disabled onclick="handleMainButtonClick()">Print All (Sab Print Karein)</button>
     </footer>
 
     <input type="file" id="hiddenFileInput" accept="application/pdf" multiple style="display:none;">
@@ -263,12 +304,28 @@
         </div>
 
         <div id="overlaySubText" style="color: var(--text-muted); margin-top: 15px; font-size: 15px; text-align: center;">
-            Print dialog handle karein.<br>Agar agli file apne aap na aaye, toh niche wala button dabayein.
+            Kripya print dialog handle karein.<br>Agar browser atak jaye toh niche wala button dabayein.
         </div>
         
         <div style="display: flex; gap: 20px; margin-top: 30px; align-items: center;">
             <button id="forceNextBtn" onclick="forceNext()">⏭ Agli File (Next)</button>
             <button onclick="stopQueue()" style="background: white; border: 2px solid var(--border); color: var(--text-main); padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">Stop Queue</button>
+        </div>
+    </div>
+
+    <!-- Kiosk Mode Help Modal -->
+    <div id="kioskModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <h3>🚀 Bina Puche Print Kaise Karein? (Auto-Print)</h3>
+            <p>Web browsers security ke karan lagatar apne aap files print nahi hone dete. Par aap Chrome ka ek trick use kar sakte hain jisse <b>saari files bina dialog ke apne aap print ho jayengi</b> (same settings ke sath):</p>
+            <ol>
+                <li>Apne Desktop par <b>Google Chrome</b> ke icon par Right-Click karein aur <b>Properties</b> par click karein.</li>
+                <li><b>Shortcut</b> tab mein jayein. Wahan <b>Target</b> box mein sabse aakhir mein ek space dekar yeh likhein:</li>
+            </ol>
+            <div class="code-snippet">--kiosk-printing</div>
+            <p><i>Example: "C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk-printing</i></p>
+            <p>Iske baad OK dabayein. Ab jab aap us Chrome icon se yeh tool kholenge, toh <b>Print All</b> dabane par sari reports apne aap bina kisi popup ke print ho jayengi!</p>
         </div>
     </div>
 
@@ -288,6 +345,11 @@
         let isProcessing = false;
         let selectedItemsForPrint = [];
 
+        // Modal Functions
+        function openModal() { document.getElementById('kioskModal').style.display = 'block'; }
+        function closeModal() { document.getElementById('kioskModal').style.display = 'none'; }
+        window.onclick = function(event) { if (event.target == document.getElementById('kioskModal')) closeModal(); }
+
         function triggerUpload() { fileInput.click(); }
 
         fileInput.addEventListener('change', async (e) => {
@@ -295,7 +357,7 @@
             if (uploaded.length === 0) return;
 
             const { PDFDocument } = PDFLib;
-            queueStatus.innerText = "Files analyze ho rahi hain...";
+            queueStatus.innerText = "Files analyze ho rahi hain (Kripya thoda rukiye)...";
 
             for (const file of uploaded) {
                 try {
@@ -345,7 +407,7 @@
             printBtn.disabled = selectedCount === 0;
             
             if (!isProcessing) {
-                printBtn.innerText = "Print All";
+                printBtn.innerText = "Print All (Sab Print Karein)";
             }
         }
 
@@ -436,7 +498,7 @@
                             handlePrintFinished(currentItem, fileUrl);
                         };
 
-                        // Auto-detect triggers
+                        // Auto-detect triggers (Ye Kiosk Mode me bhi perfectly chalega)
                         const mql = printFrame.contentWindow.matchMedia('print');
                         mql.onchange = (e) => { if (!e.matches) printFinished(); };
                         window.onfocus = () => { setTimeout(printFinished, 800); };
@@ -510,7 +572,7 @@
                 
                 queueStatus.innerText = "Mubarak ho! Sabhi reports printer ko bhej di gayi hain.";
                 queueStatus.style.color = "var(--success)";
-                printBtn.innerText = "Print All Again";
+                printBtn.innerText = "Print All Again (Dobara Print Karein)";
                 printBtn.disabled = false;
                 uploader.disabled = false;
                 
@@ -529,7 +591,7 @@
             overlay.style.display = 'none';
             queueStatus.innerText = "Printing queue ko rok diya gaya hai.";
             queueStatus.style.color = "var(--warning)";
-            printBtn.innerText = "Print Remaining";
+            printBtn.innerText = "Print Remaining (Bachi Hui Print Karein)";
             printBtn.disabled = false;
             selectAllCheckbox.disabled = false;
             renderTable();
