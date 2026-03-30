@@ -18,6 +18,7 @@
             --text-muted: #64748b;
             --border: #e2e8f0;
             --row-hover: #f1f5f9;
+            --warning: #f59e0b;
         }
 
         body { 
@@ -151,28 +152,46 @@
         #overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255,255,255,0.85);
+            background: rgba(255,255,255,0.9);
             display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 1000;
-            backdrop-filter: blur(2px);
+            backdrop-filter: blur(3px);
         }
 
         .loader {
             border: 4px solid #f3f3f3;
             border-top: 4px solid var(--primary);
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
+            width: 50px;
+            height: 50px;
             animation: spin 1s linear infinite;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         }
 
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
         #printFrame { position: absolute; width: 0; height: 0; border: none; visibility: hidden; }
+
+        /* Failsafe Button Styling */
+        #forceNextBtn {
+            background: var(--primary); 
+            color: white; 
+            border: none; 
+            padding: 12px 30px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            font-size: 16px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+            transition: all 0.2s;
+        }
+        #forceNextBtn:hover {
+            background: var(--primary-hover);
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body>
@@ -225,11 +244,15 @@
 
     <div id="overlay">
         <div class="loader"></div>
-        <div id="overlayMainText" style="font-weight: bold; font-size: 18px; color: var(--text-main);">Printing Progress...</div>
-        <div id="overlaySubText" style="color: var(--text-muted); margin-top: 5px;">Print dialog handle karein. Agar auto-next na chale toh 'Next File' dabayein.</div>
-        <div style="display: flex; gap: 15px; margin-top: 25px;">
-            <button id="forceNextBtn" onclick="forceNext()" style="background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; display: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">⏭ Next File</button>
-            <button onclick="stopQueue()" style="background: white; border: 1px solid var(--border); padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 500;">Stop Queue</button>
+        <div id="overlayMainText" style="font-weight: bold; font-size: 22px; color: var(--text-main);">Printing Progress...</div>
+        <div id="overlaySubText" style="color: var(--text-muted); margin-top: 10px; font-size: 15px; text-align: center;">
+            Print dialog handle karein.<br>Agar agli file apne aap na aaye, toh niche wala button dabayein.
+        </div>
+        
+        <div style="display: flex; gap: 20px; margin-top: 30px; align-items: center;">
+            <!-- Yeh button ab hamesha dikhega taaki aap kabhi na atke -->
+            <button id="forceNextBtn" onclick="forceNext()">⏭ Agli File (Next)</button>
+            <button onclick="stopQueue()" style="background: white; border: 2px solid var(--border); color: var(--text-main); padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">Stop Queue</button>
         </div>
     </div>
 
@@ -323,7 +346,6 @@
 
         function handleMainButtonClick() {
             if (isProcessing) {
-                // Agar queue ruki hui hai (popup blocked), toh manual resume ka kaam karega
                 processNext();
             } else {
                 startPrintingQueue();
@@ -358,7 +380,11 @@
 
             overlayMainText.innerText = `Printing: ${currentIndexDisplay()} of ${selectedItemsForPrint.length}`;
             queueStatus.innerText = `Abhi print ho rahi hai: ${currentItem.name}`;
-            document.getElementById('forceNextBtn').style.display = 'block'; // Failsafe button show karein
+            
+            // Failsafe button HAMESHA show karein
+            const forceNextBtn = document.getElementById('forceNextBtn');
+            forceNextBtn.style.display = 'inline-block';
+            forceNextBtn.innerText = "⏭ Agli File (Next)";
 
             const fileUrl = URL.createObjectURL(currentItem.file);
             printFrame.src = fileUrl;
@@ -371,41 +397,48 @@
                         const printFinished = () => {
                             if (isDone) return;
                             isDone = true;
-                            window.onfocus = null; // Clean up
+                            // Clean up events
+                            window.onfocus = null; 
                             handlePrintFinished(currentItem, fileUrl);
                         };
 
-                        // Best method for Chrome/Edge (Detects Print dialog close)
+                        // 1. matchMedia (Chrome/Edge ki best auto-detect trick)
                         const mql = printFrame.contentWindow.matchMedia('print');
                         mql.onchange = (e) => { if (!e.matches) printFinished(); };
 
-                        // Fallback 1: Standard event
-                        printFrame.contentWindow.onafterprint = printFinished;
-
-                        // Fallback 2: Window Focus
-                        window.onfocus = () => { setTimeout(printFinished, 500); };
+                        // 2. window focus (Fallback)
+                        window.onfocus = () => { setTimeout(printFinished, 800); };
 
                         printFrame.contentWindow.focus();
                         printFrame.contentWindow.print();
                     } catch (e) {
                         console.error("Print Error:", e);
-                        mainStatusBlocked();
+                        // Agar browser ne block kiya, toh button ko warning dekar highlight karein
+                        forceNextBtn.innerText = "⚠️ Blocked! Click for Next";
+                        forceNextBtn.style.backgroundColor = "var(--warning)";
                     }
-                }, 500); // Delay for rendering
+                }, 800); // PDF rendering ke liye thoda aur time diya hai taaki crash na ho
             };
         }
 
         function forceNext() {
-            // Agar browser atak jaye, toh user manual next daba sakta hai
+            // Yeh function tab chalega jab aap zabardasti next dabayenge
+            // Window focus events ko hata dete hain taaki double firing na ho
+            window.onfocus = null;
+            
             const currentItem = selectedItemsForPrint[currentIdx];
             if (currentItem) {
                 const queueItem = fileQueue.find(f => f.id === currentItem.id);
                 if (queueItem) queueItem.status = 'done';
             }
+            
+            document.getElementById('forceNextBtn').style.backgroundColor = "var(--primary)"; // Reset color
+            
             currentIdx++;
             renderTable();
+            
             if (currentIdx < selectedItemsForPrint.length) {
-                setTimeout(processNext, 500);
+                setTimeout(processNext, 300);
             } else {
                 finishQueue();
             }
@@ -425,22 +458,12 @@
             currentIdx++;
             renderTable();
 
-            // Next file try karein
             if (currentIdx < selectedItemsForPrint.length) {
-                // Chhota delay browser ko breathe karne dene ke liye
+                // Thoda intezaar karein agli file se pehle
                 setTimeout(processNext, 800);
             } else {
                 finishQueue();
             }
-        }
-
-        function mainStatusBlocked() {
-            overlay.style.display = 'none';
-            isProcessing = true; // Technically still processing but stuck
-            printBtn.disabled = false;
-            printBtn.innerText = "Print Next File ⏭";
-            queueStatus.innerText = "Browser ne popup roka. Kripya upar button dabayein.";
-            queueStatus.style.color = "#ef4444";
         }
 
         function finishQueue() {
@@ -457,6 +480,7 @@
 
         function stopQueue() {
             isProcessing = false;
+            window.onfocus = null; // Clean up
             overlay.style.display = 'none';
             queueStatus.innerText = "Printing queue ko rok diya gaya hai.";
             queueStatus.style.color = "var(--warning)";
